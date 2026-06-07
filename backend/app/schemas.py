@@ -101,3 +101,19 @@ class SecretOut(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+# ----------------- Audit Log Schemas -----------------
+
+class AuditLogOut(BaseModel):
+    """
+    Schema representing the audit log entry returned by the API.
+    """
+    id: UUID
+    action: str
+    target_key: str
+    timestamp: datetime
+    user_id: Optional[UUID]
+    user_email: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+

@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Workspace, WorkspaceMember, WorkspaceRole, User
-from app.schemas import WorkspaceCreate, WorkspaceOut, WorkspaceMemberCreate, WorkspaceMemberOut
+from app.models import Workspace, WorkspaceMember, WorkspaceRole, User, AuditLog
+from app.schemas import WorkspaceCreate, WorkspaceOut, WorkspaceMemberCreate, WorkspaceMemberOut, AuditLogOut
 from app.auth import get_current_user
 from app.rbac import require_role
 
@@ -81,3 +81,28 @@ def add_workspace_member(workspace_id: UUID, member_in: WorkspaceMemberCreate, d
     db.refresh(new_member)
 
     return new_member
+
+@router.get("/{workspace_id}/audit-logs", response_model=List[AuditLogOut])
+def get_workspace_audit_logs(workspace_id: UUID, db: Session = Depends(get_db), admin_role: str = Depends(require_role(["admin"]))):
+    """
+    Retrieves the list of audit log records for the specified workspace. Only admins have access.
+    Integrates with the users table via a left outer join to fetch the performing user's email address.
+    """
+    # Query audit logs for the workspace, left-joining User to fetch the email, ordered newest first
+    logs = db.query(
+        AuditLog.id,
+        AuditLog.action,
+        AuditLog.target_key,
+        AuditLog.timestamp,
+        AuditLog.user_id,
+        User.email.label("user_email")
+    ).outerjoin(
+        User, AuditLog.user_id == User.id
+    ).filter(
+        AuditLog.workspace_id == workspace_id
+    ).order_by(
+        AuditLog.timestamp.desc()
+    ).all()
+
+    return logs
+

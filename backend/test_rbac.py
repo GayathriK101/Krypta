@@ -171,6 +171,26 @@ def run_rbac_tests():
     assert resp.status_code == 403, f"Non-member should get 403 but got {resp.status_code}"
     print(f"Non-member response: {resp.status_code} - {resp.json().get('detail', '')}")
 
+    print("\n--- 12. Test Scenario: developer and intern try to GET audit logs (should get 403) ---")
+    resp = client.get(f"/api/v1/workspaces/{workspace_id}/audit-logs", headers=dev_headers)
+    assert resp.status_code == 403, f"Developer should have been blocked from GET audit logs but got {resp.status_code}"
+    print(f"Developer GET audit logs response (Expected 403): {resp.status_code}")
+
+    resp = client.get(f"/api/v1/workspaces/{workspace_id}/audit-logs", headers=intern_headers)
+    assert resp.status_code == 403, f"Intern should have been blocked from GET audit logs but got {resp.status_code}"
+    print(f"Intern GET audit logs response (Expected 403): {resp.status_code}")
+
+    print("\n--- 13. Test Scenario: admin tries to GET audit logs (should succeed) ---")
+    resp = client.get(f"/api/v1/workspaces/{workspace_id}/audit-logs", headers=admin_headers)
+    assert resp.status_code == 200, f"Admin should have had access to audit logs but got {resp.status_code}"
+    logs = resp.json()
+    print(f"Admin GET audit logs response: {resp.status_code} - Logs count: {len(logs)}")
+    assert len(logs) >= 2
+    # Verify that the logs correctly contain the action, target key, and user email
+    assert any(log["target_key"] == "PROD_KEY" and log["user_email"] == dev_email for log in logs)
+    assert any(log["target_key"] == "DEV_KEY" and log["user_email"] == dev_email for log in logs)
+    print("Audit logs check verified successfully: joined user email and target keys match.")
+
     print("\n======================================")
     print("   ALL RBAC TEST CASES PASSED SUCCESSFULLY!")
     print("======================================")
