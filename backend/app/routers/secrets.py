@@ -1,43 +1,17 @@
 # This file defines the secret management endpoints: creating/updating secrets and listing active secrets for a workspace.
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Workspace, WorkspaceMember, Secret, AuditLog, User
+from app.models import Workspace, WorkspaceMember, Secret, AuditLog, User, EnvironmentType
 from app.schemas import SecretCreate, SecretOut
 from app.auth import get_current_user
 from app.crypto import encrypt_value, decrypt_value
+from app.rbac import get_user_role, check_environment_access
 
 # Initialize the APIRouter for secrets endpoints
 router = APIRouter(prefix="/workspaces", tags=["Secrets"])
-
-# This helper function checks whether a user has permission to access a workspace.
-# It queries the workspace and membership tables, throwing an HTTP error if the workspace doesn't exist
-# or if the user is not a member of it.
-def verify_workspace_membership(workspace_id: UUID, user_id: UUID, db: Session) -> None:
-    """
-    Verifies that the workspace exists and the user is a member of the workspace; raises 404 or 403 exceptions if not.
-    """
-    # Verify the workspace exists first
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found."
-        )
-    
-    # Check if the user is a member of the workspace
-    membership = db.query(WorkspaceMember).filter(
-        WorkspaceMember.workspace_id == workspace_id,
-        WorkspaceMember.user_id == user_id
-    ).first()
-    
-    if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. You are not a member of this workspace."
-        )
 
 # This endpoint handles creating a new secret or updating an existing secret key.
 # It intercepts the plaintext secret value, encrypts it using AES-256-GCM, and saves only
@@ -47,8 +21,22 @@ def create_or_update_secret(workspace_id: UUID, secret_in: SecretCreate, db: Ses
     """
     Creates a new secret in the workspace, or updates an existing secret by incrementing its version, and writes an audit log.
     """
-    # Verify the current user belongs to the workspace
-    verify_workspace_membership(workspace_id, current_user.id, db)
+    # Get user's role (verifies workspace membership and workspace existence)
+    role = get_user_role(workspace_id, current_user.id, db)
+
+    # Check if the user's role has access to the target environment
+    if not check_environment_access(role, secret_in.environment):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: {role}s cannot access {secret_in.environment.value} secrets"
+        )
+
+    # Check if the user is allowed to write secrets (only admins and developers can write)
+    if role not in ("admin", "developer"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: {role}s do not have permission to write secrets"
+        )
 
     # Check if an active secret with the same key and environment already exists
     existing_secret = db.query(Secret).filter(
@@ -115,18 +103,45 @@ def create_or_update_secret(workspace_id: UUID, secret_in: SecretCreate, db: Ses
 # It fetches the encrypted secret values from the database, decrypts each value,
 # and returns the plaintext values inside the response schema.
 @router.get("/{workspace_id}/secrets", response_model=List[SecretOut])
-def get_secrets(workspace_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_secrets(
+    workspace_id: UUID,
+    environment: Optional[EnvironmentType] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Retrieves all active secrets stored within the specified workspace.
     """
-    # Verify the current user belongs to the workspace
-    verify_workspace_membership(workspace_id, current_user.id, db)
+    # Get user's role (verifies workspace membership and workspace existence)
+    role = get_user_role(workspace_id, current_user.id, db)
 
-    # Query active secrets belonging to the workspace
-    secrets = db.query(Secret).filter(
-        Secret.workspace_id == workspace_id,
-        Secret.is_active == True
-    ).all()
+    # If a specific environment is requested, check if the user has access to it
+    if environment is not None:
+        if not check_environment_access(role, environment):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: {role}s cannot access {environment.value} secrets"
+            )
+        secrets = db.query(Secret).filter(
+            Secret.workspace_id == workspace_id,
+            Secret.environment == environment,
+            Secret.is_active == True
+        ).all()
+    else:
+        # Filter returned secrets based on role:
+        # - admin/developer -> return all environments
+        # - intern          -> return ONLY development secrets
+        if role == "intern":
+            secrets = db.query(Secret).filter(
+                Secret.workspace_id == workspace_id,
+                Secret.environment == "development",
+                Secret.is_active == True
+            ).all()
+        else:
+            secrets = db.query(Secret).filter(
+                Secret.workspace_id == workspace_id,
+                Secret.is_active == True
+            ).all()
     
     # Decrypt the secrets and map them to the SecretOut schema for the client response
     results = []
