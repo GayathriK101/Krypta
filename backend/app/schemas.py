@@ -66,6 +66,8 @@ class WorkspaceMemberOut(BaseModel):
     workspace_id: UUID
     user_id: UUID
     role: WorkspaceRole
+    user_email: Optional[str] = None
+    joined_at: Optional[datetime] = None  # Mapped from created_at on WorkspaceMember
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -116,4 +118,11 @@ class AuditLogOut(BaseModel):
     user_email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class WorkspaceMemberUpdate(BaseModel):
+    """
+    Schema representing request body required to update a member's role.
+    """
+    role: WorkspaceRole = Field(..., description="The new role to assign to the member (admin/developer/intern).")
+
 

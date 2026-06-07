@@ -67,6 +67,7 @@ class WorkspaceMember(Base):
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(SQLEnum(WorkspaceRole), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=True)
 
     # Relationships
     workspace = relationship("Workspace", back_populates="members")
