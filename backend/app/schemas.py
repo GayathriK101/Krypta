@@ -69,6 +69,13 @@ class WorkspaceMemberOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class WorkspaceMemberCreate(BaseModel):
+    """
+    Schema representing request body required to add a new member to a workspace.
+    """
+    email: EmailStr = Field(..., description="The email address of the user to add.")
+    role: WorkspaceRole = Field(..., description="The role to assign to the user in the workspace (admin/developer/intern).")
+
 # ----------------- Secret Schemas -----------------
 
 class SecretCreate(BaseModel):
