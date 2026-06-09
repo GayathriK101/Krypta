@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Lock, LogOut, Key, ScrollText, Users, ChevronRight, ChevronDown } from 'lucide-react';
+import { Lock, LogOut, Key, ScrollText, Users, Terminal, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { getWorkspaces } from '../lib/api';
 import { Workspace } from '../types';
@@ -71,6 +71,7 @@ export default function Sidebar() {
               const secretsPath = `/dashboard/workspace/${ws.id}`;
               const auditPath = `/dashboard/workspace/${ws.id}/audit`;
               const membersPath = `/dashboard/workspace/${ws.id}/members`;
+              const cliPath = `/dashboard/workspace/${ws.id}/cli`;
 
               return (
                 <div key={ws.id}>
@@ -137,6 +138,19 @@ export default function Sidebar() {
                           <span>Members</span>
                         </button>
                       )}
+
+                      {/* CLI — available to all roles */}
+                      <button
+                        onClick={() => router.push(cliPath)}
+                        className={`w-full text-left pl-3 pr-2 py-1.5 text-[12px] flex items-center gap-2 transition-all ${
+                          pathname === cliPath
+                            ? 'border-l-2 border-[#7f77dd] text-[#f1f1f1] bg-[#1a1d26] font-medium'
+                            : 'border-l-2 border-transparent text-[#888] hover:text-[#f1f1f1] hover:bg-[#1a1d26]'
+                        }`}
+                      >
+                        <Terminal className="w-3.5 h-3.5 shrink-0" />
+                        <span>CLI</span>
+                      </button>
                     </div>
                   )}
                 </div>
