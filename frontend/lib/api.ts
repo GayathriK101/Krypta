@@ -117,4 +117,21 @@ export const revealSecret = async (workspaceId: string, secretId: string): Promi
   return response.data;
 };
 
+// Delete a secret by id — admin only
+export const deleteSecret = async (workspaceId: string, secretId: string): Promise<void> => {
+  await api.delete(`/workspaces/${workspaceId}/secrets/${secretId}`);
+};
+
+// Update an existing secret value — creates a new version
+export const updateSecret = async (
+  workspaceId: string,
+  secretId: string,
+  secretValue: string
+): Promise<Secret> => {
+  const response = await api.patch(`/workspaces/${workspaceId}/secrets/${secretId}`, {
+    secret_value: secretValue,
+  });
+  return response.data;
+};
+
 export default api;
